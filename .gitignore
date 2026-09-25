@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Database
+*.db
+*.sqlite3
+
+# Background image (if you don't want to upload the blank template to GH)
+# background.png
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
