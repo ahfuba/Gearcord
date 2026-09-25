@@ -63,6 +63,7 @@ class Archive(commands.Cog):
         target_forum="The forum channel to dump these into",
         thread_title="Title of the new forum thread",
         filter_type="What type of messages to archive",
+        style="How to format the archived messages",
         limit="Max number of messages to scan (default 100)"
     )
     @app_commands.choices(filter_type=[
@@ -71,6 +72,10 @@ class Archive(commands.Cog):
         app_commands.Choice(name="Images Only", value="IMAGES"),
         app_commands.Choice(name="Voice Messages Only", value="VOICE")
     ])
+    @app_commands.choices(style=[
+        app_commands.Choice(name="Rich Embed", value="EMBED"),
+        app_commands.Choice(name="Webhook (Impersonation)", value="WEBHOOK")
+    ])
     async def archive_channel(
         self, 
         interaction: discord.Interaction, 
@@ -78,6 +83,7 @@ class Archive(commands.Cog):
         target_forum: discord.ForumChannel,
         thread_title: str,
         filter_type: app_commands.Choice[str],
+        style: app_commands.Choice[str],
         limit: int = 100
     ):
         # Tell Discord we are thinking, since this might take a while
@@ -109,7 +115,7 @@ class Archive(commands.Cog):
         # We need a generic starter message to create the forum thread
         starter_embed = discord.Embed(
             title=f"Bulk Archive: {source_channel.name}",
-            description=f"Archiving {len(messages_to_archive)} messages.\nFilter: {filter_type.name}",
+            description=f"Archiving {len(messages_to_archive)} messages.\nFilter: {filter_type.name}\nStyle: {style.name}",
             color=discord.Color.brand_green()
         )
         
@@ -124,27 +130,55 @@ class Archive(commands.Cog):
 
         await interaction.followup.send(f"Found {len(messages_to_archive)} messages. Archiving them to {thread.mention}. This might take a moment...")
 
-        for msg in messages_to_archive:
-            embed = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
-            embed.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
-            embed.timestamp = msg.created_at
-            
-            if msg.attachments:
-                # Add attachment URLs to description so Discord can preview videos/audio
-                content_urls = "\n".join([a.url for a in msg.attachments])
-                embed.description = (embed.description or "") + f"\n\n**Attachments:**\n{content_urls}"
-                    
-                # If there's an image, set it as the embed image
-                for a in msg.attachments:
-                    if a.content_type and a.content_type.startswith('image/'):
-                        embed.set_image(url=a.url)
-                        break
+        webhook = None
+        if style.value == "WEBHOOK":
+            webhooks = await target_forum.webhooks()
+            webhook = discord.utils.get(webhooks, name="ArchiveWebhook")
+            if not webhook:
+                webhook = await target_forum.create_webhook(name="ArchiveWebhook")
 
-            try:
-                await thread.send(embed=embed)
-                await asyncio.sleep(1) 
-            except discord.HTTPException:
-                pass 
+        for msg in messages_to_archive:
+            if style.value == "EMBED":
+                embed = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
+                embed.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
+                embed.timestamp = msg.created_at
+                
+                if msg.attachments:
+                    # Add attachment URLs to description so Discord can preview videos/audio
+                    content_urls = "\n".join([a.url for a in msg.attachments])
+                    embed.description = (embed.description or "") + f"\n\n**Attachments:**\n{content_urls}"
+                        
+                    # If there's an image, set it as the embed image
+                    for a in msg.attachments:
+                        if a.content_type and a.content_type.startswith('image/'):
+                            embed.set_image(url=a.url)
+                            break
+
+                try:
+                    await thread.send(embed=embed)
+                    await asyncio.sleep(1) 
+                except discord.HTTPException:
+                    pass 
+            else:
+                # Webhook Impersonation Style
+                files = []
+                try:
+                    for a in msg.attachments:
+                        files.append(await a.to_file())
+                except:
+                    pass
+                    
+                try:
+                    await webhook.send(
+                        content=msg.content or "*(No text content)*",
+                        username=msg.author.display_name,
+                        avatar_url=msg.author.display_avatar.url,
+                        files=files,
+                        thread=thread
+                    )
+                    await asyncio.sleep(1)
+                except discord.HTTPException:
+                    pass
 
         await thread.send("✅ Archive complete.")
 
