@@ -2,7 +2,7 @@ name: Deploy Gearcord Bot
 
 on:
   push:
-    branches: [ "main" ] # veya ana branch adınız
+    branches: [ "main" ] # Veya kullandığınız ana branch adı (main / master)
 
 jobs:
   deploy:
@@ -17,7 +17,5 @@ jobs:
           script: |
             cd /home/trado/Gearcord
             git pull
-            pip install -r requirements.txt
-            
-            # Artık oturum derdi yok, doğrudan sistemi yeniden başlatıyoruz
+            /home/trado/Gearcord/.venv/bin/pip install -r requirements.txt
             sudo systemctl restart gearcord.service
