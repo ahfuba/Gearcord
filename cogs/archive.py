@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import os
 import asyncio
+import db
 
 class Archive(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -18,16 +19,22 @@ class Archive(commands.Cog):
         # Clean up the command when the cog unloads
         self.bot.tree.remove_command(self.ctx_menu.name, type=self.ctx_menu.type)
 
+    @app_commands.command(name="setup_archive", description="Set the default forum channel for the Right-Click Archive menu.")
+    @app_commands.describe(forum="The forum channel to send right-click archives to")
+    async def setup_archive(self, interaction: discord.Interaction, forum: discord.ForumChannel):
+        db.set_config('archive_forum_id', forum.id)
+        await interaction.response.send_message(f"✅ The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
+
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
-        FORUM_CHANNEL_ID = os.getenv('FORUM_CHANNEL_ID')
+        forum_id = db.get_config('archive_forum_id')
         
-        if not FORUM_CHANNEL_ID:
-            await interaction.response.send_message("Forum channel ID is not configured in the .env file!", ephemeral=True)
+        if not forum_id:
+            await interaction.response.send_message("The archive forum isn't configured yet! Use `/setup_archive` first.", ephemeral=True)
             return
 
-        forum_channel = self.bot.get_channel(int(FORUM_CHANNEL_ID))
+        forum_channel = self.bot.get_channel(int(forum_id))
         if not isinstance(forum_channel, discord.ForumChannel):
-            await interaction.response.send_message("Configured ID is not a valid Forum Channel.", ephemeral=True)
+            await interaction.response.send_message("The configured channel is no longer a valid Forum Channel.", ephemeral=True)
             return
 
         embed = discord.Embed(description=message.content, color=discord.Color.dark_theme())
@@ -53,6 +60,7 @@ class Archive(commands.Cog):
     @app_commands.command(name="archive_channel", description="Bulk archive messages from a channel into a single forum thread.")
     @app_commands.describe(
         source_channel="The channel to read messages from",
+        target_forum="The forum channel to dump these into",
         thread_title="Title of the new forum thread",
         filter_type="What type of messages to archive",
         limit="Max number of messages to scan (default 100)"
@@ -67,21 +75,11 @@ class Archive(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         source_channel: discord.TextChannel,
+        target_forum: discord.ForumChannel,
         thread_title: str,
         filter_type: app_commands.Choice[str],
         limit: int = 100
     ):
-        FORUM_CHANNEL_ID = os.getenv('FORUM_CHANNEL_ID')
-        
-        if not FORUM_CHANNEL_ID:
-            await interaction.response.send_message("Forum channel ID is not configured in the .env file!", ephemeral=True)
-            return
-
-        forum_channel = self.bot.get_channel(int(FORUM_CHANNEL_ID))
-        if not isinstance(forum_channel, discord.ForumChannel):
-            await interaction.response.send_message("Configured ID is not a valid Forum Channel.", ephemeral=True)
-            return
-
         # Tell Discord we are thinking, since this might take a while
         await interaction.response.defer(ephemeral=True)
 
@@ -98,7 +96,6 @@ class Archive(commands.Cog):
                     if msg.attachments and any(a.content_type and a.content_type.startswith('image/') for a in msg.attachments):
                         messages_to_archive.append(msg)
                 elif filter_type.value == "VOICE":
-                    # Check if the message is a voice message flag, or has audio attachment
                     if msg.flags.voice or (msg.attachments and any(a.content_type and a.content_type.startswith('audio/') for a in msg.attachments)):
                         messages_to_archive.append(msg)
         except discord.Forbidden:
@@ -117,7 +114,7 @@ class Archive(commands.Cog):
         )
         
         try:
-            thread, _ = await forum_channel.create_thread(
+            thread, _ = await target_forum.create_thread(
                 name=thread_title[:100],
                 embed=starter_embed
             )
@@ -145,10 +142,9 @@ class Archive(commands.Cog):
 
             try:
                 await thread.send(embed=embed)
-                # Sleep briefly to avoid ratelimits from sending too fast
                 await asyncio.sleep(1) 
             except discord.HTTPException:
-                pass # Skip if a message fails (e.g. embed too large)
+                pass 
 
         await thread.send("✅ Archive complete.")
 
