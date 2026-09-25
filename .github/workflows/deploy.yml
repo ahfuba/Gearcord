@@ -1,0 +1,23 @@
+name: Deploy Gearcord Bot
+
+on:
+  push:
+    branches: [ "main" ] # veya ana branch adınız
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: trado
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /home/trado/Gearcord
+            git pull
+            pip install -r requirements.txt
+            
+            # Artık oturum derdi yok, doğrudan sistemi yeniden başlatıyoruz
+            sudo systemctl restart gearcord.service
