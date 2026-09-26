@@ -189,8 +189,11 @@ class Archive(commands.Cog):
         total = len(messages_to_archive)
         start_time = asyncio.get_event_loop().time()
         
+        # You can set a custom animated emoji in your .env file like: LOADING_EMOJI=<a:spinner:123456789>
+        loading_emoji = os.getenv('LOADING_EMOJI', '🔄')
+        
         embed = discord.Embed(
-            title="Archiving in Progress...",
+            title=f"{loading_emoji} Archiving in Progress...",
             description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, total, start_time)}",
             color=discord.Color.blue()
         )
