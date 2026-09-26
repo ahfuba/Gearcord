@@ -314,38 +314,46 @@ class Archive(commands.Cog):
             
             for msg in messages_to_archive:
                 current_success = False
+                
+                downloaded_files = []
+                failed_urls = []
+                for a in msg.attachments:
+                    try:
+                        downloaded_files.append(await a.to_file())
+                    except Exception:
+                        failed_urls.append(a.url)
+                        
+                content_text = msg.content or ""
+                if failed_urls:
+                    content_text += "\n\n**Failed to re-upload these attachments:**\n" + "\n".join(failed_urls)
+                    
+                if not content_text and not downloaded_files:
+                    content_text = "*(No text content)*"
+                
                 if style_val == "EMBED":
-                    emb = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
+                    emb = discord.Embed(description=content_text, color=discord.Color.dark_theme())
                     emb.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
                     emb.timestamp = msg.created_at
                     
-                    if msg.attachments:
-                        content_urls = "\n".join([a.url for a in msg.attachments])
-                        emb.description = (emb.description or "") + f"\n\n**Attachments:**\n{content_urls}"
-                        for a in msg.attachments:
-                            if a.content_type and a.content_type.startswith('image/'):
-                                emb.set_image(url=a.url)
-                                break
+                    for f in downloaded_files:
+                        if f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                            emb.set_image(url=f"attachment://{f.filename}")
+                            break
+                            
                     try:
-                        await thread.send(embed=emb)
+                        await thread.send(embed=emb, files=downloaded_files)
                         current_success = True
                     except Exception:
                         pass 
                 else:
-                    files = []
-                    try:
-                        for a in msg.attachments:
-                            files.append(await a.to_file())
-                    except:
-                        pass
-                        
                     try:
                         await webhook.send(
-                            content=msg.content or "*(No text content)*",
+                            content=content_text,
                             username=msg.author.display_name,
                             avatar_url=msg.author.display_avatar.url,
-                            files=files,
-                            thread=thread
+                            files=downloaded_files,
+                            thread=thread,
+                            wait=True
                         )
                         current_success = True
                     except Exception:
