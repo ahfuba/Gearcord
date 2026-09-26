@@ -41,6 +41,7 @@ class ArchiveConfirmView(discord.ui.View):
         
         await self.cog.execute_archive(
             message=interaction.message,
+            user_id=interaction.user.id,
             source_channel=self.source_channel,
             target_forum=self.target_forum,
             thread_title=self.thread_title,
@@ -252,14 +253,16 @@ class Archive(commands.Cog):
             
         return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n\u2705 Success: {success} | \u274c Errors: {errors}\n*ETA: {eta_str}*"
 
-    async def execute_archive(self, message, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
+    async def execute_archive(self, message, user_id, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
+        import time
         total = len(messages_to_archive)
-        start_time = asyncio.get_event_loop().time()
+        start_time_loop = asyncio.get_event_loop().time()
+        start_epoch = int(time.time())
         loading_emoji = os.getenv('LOADING_EMOJI', '\U0001f504')
         
         embed = discord.Embed(
             title=f"{loading_emoji} Archiving in Progress...",
-            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, 0, 0, total, start_time)}",
+            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, 0, 0, total, start_time_loop)}",
             color=discord.Color.blue()
         )
         
@@ -267,12 +270,16 @@ class Archive(commands.Cog):
         
         starter_embed = discord.Embed(
             title=f"Bulk Archive: {source_channel.name}",
-            description=f"Archiving {total} messages.\nFilter: {filter_type_name}\nStyle: {style_val}",
             color=discord.Color.brand_green()
         )
+        starter_embed.add_field(name="Archived Channel", value=source_channel.mention, inline=False)
+        starter_embed.add_field(name="Archive Type", value=filter_type_name, inline=False)
+        starter_embed.add_field(name="Archiving Time", value=f"<t:{start_epoch}:F>", inline=False)
+        starter_embed.add_field(name="Archived by", value=f"<@{user_id}>", inline=False)
+        starter_embed.add_field(name="Took", value="*(In Progress...)*", inline=False)
         
         try:
-            thread, _ = await target_forum.create_thread(
+            thread, starter_message = await target_forum.create_thread(
                 name=thread_title[:100],
                 embed=starter_embed
             )
@@ -359,6 +366,20 @@ class Archive(commands.Cog):
         await message.edit(embed=embed)
         await thread.send(f"\u2705 Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
         
+        # Update the starter embed with total time
+        end_time_loop = asyncio.get_event_loop().time()
+        took_seconds = end_time_loop - start_time_loop
+        m, s = divmod(int(took_seconds), 60)
+        h, m = divmod(m, 60)
+        took_str = f"{h}h {m}m {s}s" if h > 0 else f"{m}m {s}s" if m > 0 else f"{s}s"
+        
+        starter_embed.set_field_at(4, name="Took", value=took_str, inline=False)
+        try:
+            if starter_message:
+                await starter_message.edit(embed=starter_embed)
+        except Exception:
+            pass
+            
         # Trigger next in queue
         self.process_next_in_queue(source_channel.guild.id)
 
