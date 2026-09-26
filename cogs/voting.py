@@ -8,6 +8,7 @@ class Voting(commands.Cog):
 
     @app_commands.command(name="tally_votes", description="Tally the votes for clips in a specific forum channel")
     @app_commands.describe(channel="The forum channel to tally votes from")
+    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def tally_votes(self, interaction: discord.Interaction, channel: discord.ForumChannel):
         await interaction.response.defer()
         

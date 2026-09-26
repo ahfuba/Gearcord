@@ -20,6 +20,7 @@ class Shame(commands.Cog):
         emoji="The exact emoji (e.g., \U0001f921) to track",
         threshold="Number of reactions needed to reach the Wall of Shame"
     )
+    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def setup_shame(self, interaction: discord.Interaction, channel: discord.TextChannel, emoji: str, threshold: int = 5):
         db.set_config('shame_channel_id', channel.id)
         db.set_config('shame_emoji', emoji)
@@ -142,6 +143,7 @@ class Shame(commands.Cog):
         await self.bot.wait_until_ready()
         
     @app_commands.command(name="force_leaderboard", description="Manually generate and post the leaderboard right now.")
+    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def force_leaderboard(self, interaction: discord.Interaction):
         await interaction.response.defer()
         iteration = int(db.get_config('shame_iteration') or 1)
