@@ -30,4 +30,12 @@ if __name__ == '__main__':
         print("ERROR: Please set your DISCORD_TOKEN in the .env file.")
     else:
         bot = ClipBot()
+
+        @bot.command(name="sync")
+        @commands.has_permissions(administrator=True)
+        async def sync_commands(ctx):
+            bot.tree.copy_global_to(guild=ctx.guild)
+            synced = await bot.tree.sync(guild=ctx.guild)
+            await ctx.send(f"\u2705 Synced {len(synced)} commands to this server instantly!")
+
         bot.run(TOKEN)
