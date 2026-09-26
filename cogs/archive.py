@@ -268,123 +268,142 @@ class Archive(commands.Cog):
         
         await message.edit(embed=embed)
         
-        starter_embed = discord.Embed(
-            title=f"Bulk Archive: {source_channel.name}",
-            color=discord.Color.brand_green()
-        )
-        starter_embed.add_field(name="Archived Channel", value=source_channel.mention, inline=False)
-        starter_embed.add_field(name="Archive Type", value=filter_type_name, inline=False)
-        starter_embed.add_field(name="Archiving Time", value=f"<t:{start_epoch}:F>", inline=False)
-        starter_embed.add_field(name="Archived by", value=f"<@{user_id}>", inline=False)
-        starter_embed.add_field(name="Took", value="*(In Progress...)*", inline=False)
-        
         try:
-            thread, starter_message = await target_forum.create_thread(
-                name=thread_title[:100],
-                embed=starter_embed
+            starter_embed = discord.Embed(
+                title=f"Bulk Archive: {source_channel.name}",
+                color=discord.Color.brand_green()
             )
-        except Exception as e:
-            embed.title = "\u274c Archive Failed"
-            embed.description = f"Failed to create the forum thread: {e}"
-            embed.color = discord.Color.red()
-            await message.edit(embed=embed)
-            self.process_next_in_queue(source_channel.guild.id)
-            return
-
-        webhook = None
-        if style_val == "WEBHOOK":
-            webhooks = await target_forum.webhooks()
-            webhook = discord.utils.get(webhooks, name="ArchiveWebhook")
-            if not webhook:
-                webhook = await target_forum.create_webhook(name="ArchiveWebhook")
-
-        processed = 0
-        success = 0
-        errors = 0
-        last_update_time = asyncio.get_event_loop().time()
-        
-        for msg in messages_to_archive:
-            current_success = False
-            if style_val == "EMBED":
-                emb = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
-                emb.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
-                emb.timestamp = msg.created_at
-                
-                if msg.attachments:
-                    content_urls = "\n".join([a.url for a in msg.attachments])
-                    emb.description = (emb.description or "") + f"\n\n**Attachments:**\n{content_urls}"
-                    for a in msg.attachments:
-                        if a.content_type and a.content_type.startswith('image/'):
-                            emb.set_image(url=a.url)
-                            break
-                try:
-                    await thread.send(embed=emb)
-                    current_success = True
-                except discord.HTTPException:
-                    pass 
-            else:
-                files = []
-                try:
-                    for a in msg.attachments:
-                        files.append(await a.to_file())
-                except:
-                    pass
-                    
-                try:
-                    await webhook.send(
-                        content=msg.content or "*(No text content)*",
-                        username=msg.author.display_name,
-                        avatar_url=msg.author.display_avatar.url,
-                        files=files,
-                        thread=thread
-                    )
-                    current_success = True
-                except discord.HTTPException:
-                    pass
-
-            if current_success:
-                success += 1
-            else:
-                errors += 1
-                
-            processed += 1
+            starter_embed.add_field(name="Archived Channel", value=source_channel.mention, inline=False)
+            starter_embed.add_field(name="Archive Type", value=filter_type_name, inline=False)
+            starter_embed.add_field(name="Archiving Time", value=f"<t:{start_epoch}:F>", inline=False)
+            starter_embed.add_field(name="Archived by", value=f"<@{user_id}>", inline=False)
+            starter_embed.add_field(name="Took", value="*(In Progress...)*", inline=False)
             
-            # Avoid sending messages too fast
-            await asyncio.sleep(1)
-            
-            current_time = asyncio.get_event_loop().time()
-            if current_time - last_update_time > 3.0 or processed == total:
-                embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(processed, success, errors, total, start_time)}"
+            try:
+                thread, starter_message = await target_forum.create_thread(
+                    name=thread_title[:100],
+                    embed=starter_embed
+                )
+            except Exception as e:
+                embed.title = "\u274c Archive Failed"
+                embed.description = f"Failed to create the forum thread: {e}"
+                embed.color = discord.Color.red()
+                await message.edit(embed=embed)
+                self.process_next_in_queue(source_channel.guild.id)
+                return
+
+            webhook = None
+            if style_val == "WEBHOOK":
                 try:
+                    webhooks = await target_forum.webhooks()
+                    webhook = discord.utils.get(webhooks, name="ArchiveWebhook")
+                    if not webhook:
+                        webhook = await target_forum.create_webhook(name="ArchiveWebhook")
+                except discord.Forbidden:
+                    embed.title = "\u274c Archive Failed"
+                    embed.description = "I need the 'Manage Webhooks' permission to use the Webhook style!"
+                    embed.color = discord.Color.red()
                     await message.edit(embed=embed)
-                except discord.HTTPException:
-                    pass
-                last_update_time = current_time
+                    self.process_next_in_queue(source_channel.guild.id)
+                    return
 
-        embed.title = "\u2705 Archive Complete"
-        embed.color = discord.Color.green() if errors == 0 else discord.Color.orange()
-        await message.edit(embed=embed)
-        await thread.send(f"\u2705 Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
-        
-        try:
-            await thread.edit(locked=True)
-        except Exception:
-            pass
-        
-        # Update the starter embed with total time
-        end_time_loop = asyncio.get_event_loop().time()
-        took_seconds = end_time_loop - start_time_loop
-        m, s = divmod(int(took_seconds), 60)
-        h, m = divmod(m, 60)
-        took_str = f"{h}h {m}m {s}s" if h > 0 else f"{m}m {s}s" if m > 0 else f"{s}s"
-        
-        starter_embed.set_field_at(4, name="Took", value=took_str, inline=False)
-        try:
-            if starter_message:
-                await starter_message.edit(embed=starter_embed)
-        except Exception:
-            pass
+            processed = 0
+            success = 0
+            errors = 0
+            last_update_time = asyncio.get_event_loop().time()
             
+            for msg in messages_to_archive:
+                current_success = False
+                if style_val == "EMBED":
+                    emb = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
+                    emb.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
+                    emb.timestamp = msg.created_at
+                    
+                    if msg.attachments:
+                        content_urls = "\n".join([a.url for a in msg.attachments])
+                        emb.description = (emb.description or "") + f"\n\n**Attachments:**\n{content_urls}"
+                        for a in msg.attachments:
+                            if a.content_type and a.content_type.startswith('image/'):
+                                emb.set_image(url=a.url)
+                                break
+                    try:
+                        await thread.send(embed=emb)
+                        current_success = True
+                    except Exception:
+                        pass 
+                else:
+                    files = []
+                    try:
+                        for a in msg.attachments:
+                            files.append(await a.to_file())
+                    except:
+                        pass
+                        
+                    try:
+                        await webhook.send(
+                            content=msg.content or "*(No text content)*",
+                            username=msg.author.display_name,
+                            avatar_url=msg.author.display_avatar.url,
+                            files=files,
+                            thread=thread
+                        )
+                        current_success = True
+                    except Exception:
+                        pass
+
+                if current_success:
+                    success += 1
+                else:
+                    errors += 1
+                    
+                processed += 1
+                
+                # Avoid sending messages too fast
+                await asyncio.sleep(1)
+                
+                current_time = asyncio.get_event_loop().time()
+                if current_time - last_update_time > 3.0 or processed == total:
+                    embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(processed, success, errors, total, start_time_loop)}"
+                    try:
+                        await message.edit(embed=embed)
+                    except Exception:
+                        pass
+                    last_update_time = current_time
+
+            embed.title = "\u2705 Archive Complete"
+            embed.color = discord.Color.green() if errors == 0 else discord.Color.orange()
+            await message.edit(embed=embed)
+            await thread.send(f"\u2705 Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
+            
+            try:
+                await thread.edit(locked=True)
+            except Exception:
+                pass
+            
+            # Update the starter embed with total time
+            end_time_loop = asyncio.get_event_loop().time()
+            took_seconds = end_time_loop - start_time_loop
+            m, s = divmod(int(took_seconds), 60)
+            h, m = divmod(m, 60)
+            took_str = f"{h}h {m}m {s}s" if h > 0 else f"{m}m {s}s" if m > 0 else f"{s}s"
+            
+            starter_embed.set_field_at(4, name="Took", value=took_str, inline=False)
+            try:
+                if starter_message:
+                    await starter_message.edit(embed=starter_embed)
+            except Exception:
+                pass
+                
+        except Exception as e:
+            # Fallback error catcher so the queue doesn't get permanently locked
+            try:
+                embed.title = "\u274c Archive Crashed"
+                embed.description = f"An unexpected error occurred: {e}"
+                embed.color = discord.Color.red()
+                await message.edit(embed=embed)
+            except:
+                pass
+                
         # Trigger next in queue
         self.process_next_in_queue(source_channel.guild.id)
 
