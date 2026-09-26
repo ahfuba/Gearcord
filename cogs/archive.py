@@ -366,6 +366,11 @@ class Archive(commands.Cog):
         await message.edit(embed=embed)
         await thread.send(f"\u2705 Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
         
+        try:
+            await thread.edit(locked=True)
+        except Exception:
+            pass
+        
         # Update the starter embed with total time
         end_time_loop = asyncio.get_event_loop().time()
         took_seconds = end_time_loop - start_time_loop
