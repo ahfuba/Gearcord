@@ -86,11 +86,17 @@ class Archive(commands.Cog):
 
     @app_commands.command(name="setup_archive", description="Set the default forum channel for the Right-Click Archive menu.")
     @app_commands.describe(forum="The forum channel to send right-click archives to")
+    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def setup_archive(self, interaction: discord.Interaction, forum: discord.ForumChannel):
         db.set_config('archive_forum_id', forum.id)
         await interaction.response.send_message(f"✅ The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
 
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
+        # Check permissions manually for Context Menu
+        if not interaction.user.guild_permissions.view_audit_log or not interaction.user.guild_permissions.manage_channels:
+            await interaction.response.send_message("❌ You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.", ephemeral=True)
+            return
+
         # Context menu is quick, so it bypasses the bulk queue
         forum_id = db.get_config('archive_forum_id')
         if not forum_id:
@@ -135,6 +141,7 @@ class Archive(commands.Cog):
         app_commands.Choice(name="Rich Embed", value="EMBED"),
         app_commands.Choice(name="Webhook (Impersonation)", value="WEBHOOK")
     ])
+    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def archive_channel(
         self, 
         interaction: discord.Interaction, 
