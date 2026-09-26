@@ -32,7 +32,7 @@ class ArchiveConfirmView(discord.ui.View):
     @discord.ui.button(label="Proceed & Archive", style=discord.ButtonStyle.green, custom_id="proceed")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the person who initiated this scan can confirm it.", ephemeral=True)
+            await interaction.response.send_message("Only the person who initiated this scan can confirm it.")
             return
 
         for child in self.children:
@@ -53,7 +53,7 @@ class ArchiveConfirmView(discord.ui.View):
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the person who initiated this scan can cancel it.", ephemeral=True)
+            await interaction.response.send_message("Only the person who initiated this scan can cancel it.")
             return
 
         for child in self.children:
@@ -90,22 +90,22 @@ class Archive(commands.Cog):
     @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def setup_archive(self, interaction: discord.Interaction, forum: discord.ForumChannel):
         db.set_config('archive_forum_id', forum.id)
-        await interaction.response.send_message(f"\u2705 The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"\u2705 The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.")
 
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
         # Check permissions manually for Context Menu
         if not interaction.user.guild_permissions.view_audit_log or not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("\u274c You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.", ephemeral=True)
+            await interaction.response.send_message("\u274c You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.")
             return
 
         # Context menu is quick, so it bypasses the bulk queue
         forum_id = db.get_config('archive_forum_id')
         if not forum_id:
-            await interaction.response.send_message("The archive forum isn't configured yet! Use `/setup_archive` first.", ephemeral=True)
+            await interaction.response.send_message("The archive forum isn't configured yet! Use `/setup_archive` first.")
             return
         forum_channel = self.bot.get_channel(int(forum_id))
         if not isinstance(forum_channel, discord.ForumChannel):
-            await interaction.response.send_message("The configured channel is no longer a valid Forum Channel.", ephemeral=True)
+            await interaction.response.send_message("The configured channel is no longer a valid Forum Channel.")
             return
 
         embed = discord.Embed(description=message.content, color=discord.Color.dark_theme())
@@ -116,7 +116,7 @@ class Archive(commands.Cog):
             embed.set_image(url=message.attachments[0].url)
 
         title = f"Archive: {message.author.display_name}"
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         try:
             thread, _ = await forum_channel.create_thread(name=title[:100], embed=embed)
             await interaction.followup.send(f"Successfully archived to {thread.mention}!")
