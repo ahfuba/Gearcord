@@ -6,26 +6,41 @@ import asyncio
 import db
 
 class ArchiveConfirmView(discord.ui.View):
-    def __init__(self, cog, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
-        super().__init__(timeout=300) # 5 minute timeout to confirm
+    def __init__(self, cog, output_channel, user_id, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
+        super().__init__(timeout=300) # 5 minute timeout
         self.cog = cog
+        self.output_channel = output_channel
+        self.user_id = user_id
         self.source_channel = source_channel
         self.target_forum = target_forum
         self.thread_title = thread_title
         self.filter_type_name = filter_type_name
         self.style_val = style_val
         self.messages_to_archive = messages_to_archive
+        self.message = None
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(content="❌ Archiving timed out (no response). Moving to next in queue if any.", view=self, embed=None)
+        except:
+            pass
+        self.cog.process_next_in_queue(self.source_channel.guild.id)
 
     @discord.ui.button(label="Proceed & Archive", style=discord.ButtonStyle.green, custom_id="proceed")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Disable buttons so they can't be clicked twice
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the person who initiated this scan can confirm it.", ephemeral=True)
+            return
+
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(view=self)
         
-        # Hand off to the cog to actually do the archiving
         await self.cog.execute_archive(
-            interaction=interaction,
+            message=interaction.message,
             source_channel=self.source_channel,
             target_forum=self.target_forum,
             thread_title=self.thread_title,
@@ -36,24 +51,38 @@ class ArchiveConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the person who initiated this scan can cancel it.", ephemeral=True)
+            return
+
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(content="❌ Archiving operation cancelled.", embed=None, view=self)
+        self.cog.process_next_in_queue(self.source_channel.guild.id)
 
 
 class Archive(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Register the context menu command dynamically for the cog
         self.ctx_menu = app_commands.ContextMenu(
             name="Archive to Forum",
             callback=self.archive_menu_callback,
         )
         self.bot.tree.add_command(self.ctx_menu)
+        
+        # State tracking to limit 1 archive process per server
+        self.is_archiving = {} # guild_id -> bool
+        self.archive_queue = {} # guild_id -> list of job dicts
 
     async def cog_unload(self):
-        # Clean up the command when the cog unloads
         self.bot.tree.remove_command(self.ctx_menu.name, type=self.ctx_menu.type)
+
+    def process_next_in_queue(self, guild_id):
+        if guild_id in self.archive_queue and len(self.archive_queue[guild_id]) > 0:
+            next_job = self.archive_queue[guild_id].pop(0)
+            asyncio.create_task(self.start_scan(**next_job))
+        else:
+            self.is_archiving[guild_id] = False
 
     @app_commands.command(name="setup_archive", description="Set the default forum channel for the Right-Click Archive menu.")
     @app_commands.describe(forum="The forum channel to send right-click archives to")
@@ -62,6 +91,7 @@ class Archive(commands.Cog):
         await interaction.response.send_message(f"✅ The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
 
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
+        # Context menu is quick, so it bypasses the bulk queue
         forum_id = db.get_config('archive_forum_id')
         if not forum_id:
             await interaction.response.send_message("The archive forum isn't configured yet! Use `/setup_archive` first.", ephemeral=True)
@@ -115,11 +145,39 @@ class Archive(commands.Cog):
         style: app_commands.Choice[str],
         limit: int = None
     ):
-        # We need this to not be ephemeral so the progress bar can be seen in the execution channel
-        await interaction.response.defer(ephemeral=False)
+        guild_id = interaction.guild_id
+        
+        job = {
+            'output_channel': interaction.channel,
+            'user_id': interaction.user.id,
+            'source_channel': source_channel,
+            'target_forum': target_forum,
+            'thread_title': thread_title,
+            'filter_type': filter_type,
+            'style': style,
+            'limit': limit
+        }
 
+        if self.is_archiving.get(guild_id, False):
+            if guild_id not in self.archive_queue:
+                self.archive_queue[guild_id] = []
+            self.archive_queue[guild_id].append(job)
+            await interaction.response.send_message(f"⏳ An archive process is already running in this server. You have been added to the queue (Position {len(self.archive_queue[guild_id])}). I will ping you when it's your turn.")
+            return
+
+        self.is_archiving[guild_id] = True
+        await interaction.response.defer(ephemeral=False)
+        job['interaction'] = interaction
+        await self.start_scan(**job)
+
+    async def start_scan(self, output_channel, user_id, source_channel, target_forum, thread_title, filter_type, style, limit, interaction=None):
         limit_text = "Unlimited" if limit is None else str(limit)
-        status_msg = await interaction.followup.send(f"🔍 **Scanning {source_channel.mention}** (Limit: {limit_text})... This may take a minute.", wait=True)
+        msg_text = f"🔍 <@{user_id}>, **Scanning {source_channel.mention}** (Limit: {limit_text})... This may take a minute."
+        
+        if interaction:
+            status_msg = await interaction.followup.send(msg_text, wait=True)
+        else:
+            status_msg = await output_channel.send(msg_text)
 
         messages_to_archive = []
         try:
@@ -136,22 +194,29 @@ class Archive(commands.Cog):
                     if msg.flags.voice or (msg.attachments and any(a.content_type and a.content_type.startswith('audio/') for a in msg.attachments)):
                         messages_to_archive.append(msg)
         except discord.Forbidden:
-            await status_msg.edit(content="❌ I do not have permission to read message history in that channel.")
+            await status_msg.edit(content=f"❌ <@{user_id}> I do not have permission to read message history in {source_channel.mention}.")
+            self.process_next_in_queue(source_channel.guild.id)
+            return
+        except Exception as e:
+            await status_msg.edit(content=f"❌ <@{user_id}> Scan failed: {e}")
+            self.process_next_in_queue(source_channel.guild.id)
             return
 
         if not messages_to_archive:
-            await status_msg.edit(content="⚠️ No messages found matching that filter.")
+            await status_msg.edit(content=f"⚠️ <@{user_id}> No messages found matching `{filter_type.name}`.")
+            self.process_next_in_queue(source_channel.guild.id)
             return
 
-        # Phase 2: Confirmation
         embed = discord.Embed(
             title="Scan Complete",
-            description=f"Found **{len(messages_to_archive)}** messages matching `{filter_type.name}` in {source_channel.mention}.\n\nAre you sure you want to proceed and archive these to {target_forum.mention}?\n*(Depending on the amount, this could take several minutes. Do not restart the bot.)*",
+            description=f"Found **{len(messages_to_archive)}** messages matching `{filter_type.name}` in {source_channel.mention}.\n\nAre you sure you want to proceed and archive these to {target_forum.mention}?",
             color=discord.Color.yellow()
         )
         
         view = ArchiveConfirmView(
             self, 
+            output_channel,
+            user_id,
             source_channel, 
             target_forum, 
             thread_title, 
@@ -159,10 +224,11 @@ class Archive(commands.Cog):
             style.value, 
             messages_to_archive
         )
+        view.message = status_msg
         
-        await status_msg.edit(content=None, embed=embed, view=view)
+        await status_msg.edit(content=f"<@{user_id}>", embed=embed, view=view)
 
-    def generate_progress_bar(self, current, total, start_time, length=20):
+    def generate_progress_bar(self, current, success, errors, total, start_time, length=20):
         percent = current / total if total > 0 else 1
         filled = int(length * percent)
         bar = '█' * filled + '░' * (length - filled)
@@ -171,35 +237,26 @@ class Archive(commands.Cog):
             elapsed = asyncio.get_event_loop().time() - start_time
             rate = current / elapsed
             remaining_seconds = (total - current) / rate
-            
             m, s = divmod(int(remaining_seconds), 60)
             h, m = divmod(m, 60)
-            if h > 0:
-                eta_str = f"~{h}h {m}m {s}s left"
-            elif m > 0:
-                eta_str = f"~{m}m {s}s left"
-            else:
-                eta_str = f"~{s}s left"
+            eta_str = f"~{h}h {m}m {s}s left" if h > 0 else f"~{m}m {s}s left" if m > 0 else f"~{s}s left"
         else:
             eta_str = "Calculating ETA..."
             
-        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n*ETA: {eta_str}*"
+        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n✅ Success: {success} | ❌ Errors: {errors}\n*ETA: {eta_str}*"
 
-    async def execute_archive(self, interaction, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
+    async def execute_archive(self, message, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
         total = len(messages_to_archive)
         start_time = asyncio.get_event_loop().time()
-        
-        # You can set a custom animated emoji in your .env file like: LOADING_EMOJI=<a:spinner:123456789>
         loading_emoji = os.getenv('LOADING_EMOJI', '🔄')
         
         embed = discord.Embed(
             title=f"{loading_emoji} Archiving in Progress...",
-            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, total, start_time)}",
+            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, 0, 0, total, start_time)}",
             color=discord.Color.blue()
         )
         
-        # Update the original confirmation message with the progress bar
-        await interaction.message.edit(embed=embed)
+        await message.edit(embed=embed)
         
         starter_embed = discord.Embed(
             title=f"Bulk Archive: {source_channel.name}",
@@ -216,7 +273,8 @@ class Archive(commands.Cog):
             embed.title = "❌ Archive Failed"
             embed.description = f"Failed to create the forum thread: {e}"
             embed.color = discord.Color.red()
-            await interaction.message.edit(embed=embed)
+            await message.edit(embed=embed)
+            self.process_next_in_queue(source_channel.guild.id)
             return
 
         webhook = None
@@ -226,10 +284,13 @@ class Archive(commands.Cog):
             if not webhook:
                 webhook = await target_forum.create_webhook(name="ArchiveWebhook")
 
-        archived_count = 0
+        processed = 0
+        success = 0
+        errors = 0
         last_update_time = asyncio.get_event_loop().time()
         
         for msg in messages_to_archive:
+            current_success = False
             if style_val == "EMBED":
                 emb = discord.Embed(description=msg.content, color=discord.Color.dark_theme())
                 emb.set_author(name=msg.author.display_name, icon_url=msg.author.display_avatar.url)
@@ -244,7 +305,7 @@ class Archive(commands.Cog):
                             break
                 try:
                     await thread.send(embed=emb)
-                    await asyncio.sleep(1) 
+                    current_success = True
                 except discord.HTTPException:
                     pass 
             else:
@@ -263,27 +324,36 @@ class Archive(commands.Cog):
                         files=files,
                         thread=thread
                     )
-                    await asyncio.sleep(1)
+                    current_success = True
                 except discord.HTTPException:
                     pass
 
-            archived_count += 1
+            if current_success:
+                success += 1
+            else:
+                errors += 1
+                
+            processed += 1
             
-            # Update the progress bar embed every 3 seconds to avoid Discord API rate limits on message editing
+            # Avoid sending messages too fast
+            await asyncio.sleep(1)
+            
             current_time = asyncio.get_event_loop().time()
-            if current_time - last_update_time > 3.0 or archived_count == total:
-                embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(archived_count, total, start_time)}"
+            if current_time - last_update_time > 3.0 or processed == total:
+                embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(processed, success, errors, total, start_time)}"
                 try:
-                    await interaction.message.edit(embed=embed)
+                    await message.edit(embed=embed)
                 except discord.HTTPException:
                     pass
                 last_update_time = current_time
 
-        # Final Success State
         embed.title = "✅ Archive Complete"
-        embed.color = discord.Color.green()
-        await interaction.message.edit(embed=embed)
-        await thread.send("✅ Bulk archive has finished processing.")
+        embed.color = discord.Color.green() if errors == 0 else discord.Color.orange()
+        await message.edit(embed=embed)
+        await thread.send(f"✅ Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
+        
+        # Trigger next in queue
+        self.process_next_in_queue(source_channel.guild.id)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Archive(bot))
