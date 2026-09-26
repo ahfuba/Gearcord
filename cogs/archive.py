@@ -162,18 +162,36 @@ class Archive(commands.Cog):
         
         await status_msg.edit(content=None, embed=embed, view=view)
 
-    def generate_progress_bar(self, current, total, length=20):
-        percent = current / total
+    def generate_progress_bar(self, current, total, start_time, length=20):
+        percent = current / total if total > 0 else 1
         filled = int(length * percent)
         bar = '█' * filled + '░' * (length - filled)
-        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)"
+        
+        if current > 0:
+            elapsed = asyncio.get_event_loop().time() - start_time
+            rate = current / elapsed
+            remaining_seconds = (total - current) / rate
+            
+            m, s = divmod(int(remaining_seconds), 60)
+            h, m = divmod(m, 60)
+            if h > 0:
+                eta_str = f"~{h}h {m}m {s}s left"
+            elif m > 0:
+                eta_str = f"~{m}m {s}s left"
+            else:
+                eta_str = f"~{s}s left"
+        else:
+            eta_str = "Calculating ETA..."
+            
+        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n*ETA: {eta_str}*"
 
     async def execute_archive(self, interaction, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
         total = len(messages_to_archive)
+        start_time = asyncio.get_event_loop().time()
         
         embed = discord.Embed(
             title="Archiving in Progress...",
-            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, total)}",
+            description=f"Target: {target_forum.mention}\n{self.generate_progress_bar(0, total, start_time)}",
             color=discord.Color.blue()
         )
         
@@ -251,7 +269,7 @@ class Archive(commands.Cog):
             # Update the progress bar embed every 3 seconds to avoid Discord API rate limits on message editing
             current_time = asyncio.get_event_loop().time()
             if current_time - last_update_time > 3.0 or archived_count == total:
-                embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(archived_count, total)}"
+                embed.description = f"Target: {thread.mention}\n{self.generate_progress_bar(archived_count, total, start_time)}"
                 try:
                     await interaction.message.edit(embed=embed)
                 except discord.HTTPException:
