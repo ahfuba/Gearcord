@@ -16,29 +16,29 @@ class Core(commands.Cog):
             color=discord.Color.blurple()
         )
         
-        embed.add_field(name="📸 Archiving (Walkthrough)", value="""
+        embed.add_field(name="\U0001f4f8 Archiving (Walkthrough)", value="""
 **1. Setup Right-Click Archiving:**
 Run `/setup_archive` to pick a default forum channel. Once set, you can Right-Click any message -> Apps -> `Archive to Forum` to instantly save it as its own thread.
 
 **2. Bulk Sweep a Channel:**
 Run `/archive_channel` to move large amounts of messages into a single thread.
-• Select the source channel, target forum, and a filter (like `Videos Only`).
-• Choose the style (`Embed` or `Webhook Impersonation`).
-• The bot will **Scan** the channel and show you how many messages it found.
-• Once you click **Proceed**, it will queue your task, show a live progress bar with an ETA, and safely copy the messages.
+\u2022 Select the source channel, target forum, and a filter (like `Videos Only`).
+\u2022 Choose the style (`Embed` or `Webhook Impersonation`).
+\u2022 The bot will **Scan** the channel and show you how many messages it found.
+\u2022 Once you click **Proceed**, it will queue your task, show a live progress bar with an ETA, and safely copy the messages.
 *(Note: Archiving commands require View Audit Log & Manage Channels permissions)*
         """, inline=False)
 
-        embed.add_field(name="🤡 Wall of Shame", value="""
+        embed.add_field(name="\U0001f921 Wall of Shame", value="""
 **`/setup_shame`**: Configure the emoji, channel, and reaction threshold.
 **`/force_leaderboard`**: Generate and post the graphical leaderboard right now.
         """, inline=False)
 
-        embed.add_field(name="🏆 Voting & Contests", value="""
+        embed.add_field(name="\U0001f3c6 Voting & Contests", value="""
 **`/tally_votes`**: Scan any forum channel, count up the default reactions on starter messages, and print a Top 10 Leaderboard.
         """, inline=False)
         
-        embed.add_field(name="⚙️ Core", value="""
+        embed.add_field(name="\u2699\ufe0f Core", value="""
 **`/stats`**: View statistics about how many shameful messages and votes have been logged.
         """, inline=False)
 
@@ -59,7 +59,7 @@ Run `/archive_channel` to move large amounts of messages into a single thread.
         
         conn.close()
         
-        embed = discord.Embed(title="📊 Bot Statistics", color=discord.Color.green())
+        embed = discord.Embed(title="\U0001f4ca Bot Statistics", color=discord.Color.green())
         embed.add_field(name="Total Shamed Messages", value=f"{total_shamed:,}", inline=True)
         embed.add_field(name="Total Unique Votes", value=f"{total_votes:,}", inline=True)
         

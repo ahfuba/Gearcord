@@ -17,7 +17,7 @@ class Shame(commands.Cog):
     @app_commands.command(name="setup_shame", description="Configure the Wall of Shame feature.")
     @app_commands.describe(
         channel="The channel to post the Wall of Shame to",
-        emoji="The exact emoji (e.g., 🤡) to track",
+        emoji="The exact emoji (e.g., \U0001f921) to track",
         threshold="Number of reactions needed to reach the Wall of Shame"
     )
     async def setup_shame(self, interaction: discord.Interaction, channel: discord.TextChannel, emoji: str, threshold: int = 5):
@@ -29,7 +29,7 @@ class Shame(commands.Cog):
         db.set_config('shame_setup_date', datetime.datetime.utcnow().isoformat())
         db.set_config('shame_iteration', 1)
         
-        await interaction.response.send_message(f"✅ Wall of Shame configured! Messages receiving {threshold} {emoji} reactions will be copied to {channel.mention} via Webhook. The first leaderboard will be posted automatically in 30 days.")
+        await interaction.response.send_message(f"\u2705 Wall of Shame configured! Messages receiving {threshold} {emoji} reactions will be copied to {channel.mention} via Webhook. The first leaderboard will be posted automatically in 30 days.")
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -203,7 +203,7 @@ class Shame(commands.Cog):
         try:
             image_bytes = image_gen.generate_leaderboard(guild_name, f"{iteration_str} ANNUAL LEADERBOARD", top_users)
             file = discord.File(fp=image_bytes, filename="leaderboard.png")
-            content = f"🏆 **The {iteration_str} Wall of Shame Leaderboard is here!** 🏆"
+            content = f"\U0001f3c6 **The {iteration_str} Wall of Shame Leaderboard is here!** \U0001f3c6"
             if interaction:
                 await interaction.followup.send(content=content, file=file)
             else:

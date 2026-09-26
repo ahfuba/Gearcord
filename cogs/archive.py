@@ -24,7 +24,7 @@ class ArchiveConfirmView(discord.ui.View):
             child.disabled = True
         try:
             if self.message:
-                await self.message.edit(content="❌ Archiving timed out (no response). Moving to next in queue if any.", view=self, embed=None)
+                await self.message.edit(content="\u274c Archiving timed out (no response). Moving to next in queue if any.", view=self, embed=None)
         except:
             pass
         self.cog.process_next_in_queue(self.source_channel.guild.id)
@@ -57,7 +57,7 @@ class ArchiveConfirmView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
-        await interaction.response.edit_message(content="❌ Archiving operation cancelled.", embed=None, view=self)
+        await interaction.response.edit_message(content="\u274c Archiving operation cancelled.", embed=None, view=self)
         self.cog.process_next_in_queue(self.source_channel.guild.id)
 
 
@@ -89,12 +89,12 @@ class Archive(commands.Cog):
     @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
     async def setup_archive(self, interaction: discord.Interaction, forum: discord.ForumChannel):
         db.set_config('archive_forum_id', forum.id)
-        await interaction.response.send_message(f"✅ The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
+        await interaction.response.send_message(f"\u2705 The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.", ephemeral=True)
 
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
         # Check permissions manually for Context Menu
         if not interaction.user.guild_permissions.view_audit_log or not interaction.user.guild_permissions.manage_channels:
-            await interaction.response.send_message("❌ You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.", ephemeral=True)
+            await interaction.response.send_message("\u274c You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.", ephemeral=True)
             return
 
         # Context menu is quick, so it bypasses the bulk queue
@@ -169,7 +169,7 @@ class Archive(commands.Cog):
             if guild_id not in self.archive_queue:
                 self.archive_queue[guild_id] = []
             self.archive_queue[guild_id].append(job)
-            await interaction.response.send_message(f"⏳ An archive process is already running in this server. You have been added to the queue (Position {len(self.archive_queue[guild_id])}). I will ping you when it's your turn.")
+            await interaction.response.send_message(f"\u23f3 An archive process is already running in this server. You have been added to the queue (Position {len(self.archive_queue[guild_id])}). I will ping you when it's your turn.")
             return
 
         self.is_archiving[guild_id] = True
@@ -179,7 +179,7 @@ class Archive(commands.Cog):
 
     async def start_scan(self, output_channel, user_id, source_channel, target_forum, thread_title, filter_type, style, limit, interaction=None):
         limit_text = "Unlimited" if limit is None else str(limit)
-        msg_text = f"🔍 <@{user_id}>, **Scanning {source_channel.mention}** (Limit: {limit_text})... This may take a minute."
+        msg_text = f"\U0001f50d <@{user_id}>, **Scanning {source_channel.mention}** (Limit: {limit_text})... This may take a minute."
         
         if interaction:
             status_msg = await interaction.followup.send(msg_text, wait=True)
@@ -201,16 +201,16 @@ class Archive(commands.Cog):
                     if msg.flags.voice or (msg.attachments and any(a.content_type and a.content_type.startswith('audio/') for a in msg.attachments)):
                         messages_to_archive.append(msg)
         except discord.Forbidden:
-            await status_msg.edit(content=f"❌ <@{user_id}> I do not have permission to read message history in {source_channel.mention}.")
+            await status_msg.edit(content=f"\u274c <@{user_id}> I do not have permission to read message history in {source_channel.mention}.")
             self.process_next_in_queue(source_channel.guild.id)
             return
         except Exception as e:
-            await status_msg.edit(content=f"❌ <@{user_id}> Scan failed: {e}")
+            await status_msg.edit(content=f"\u274c <@{user_id}> Scan failed: {e}")
             self.process_next_in_queue(source_channel.guild.id)
             return
 
         if not messages_to_archive:
-            await status_msg.edit(content=f"⚠️ <@{user_id}> No messages found matching `{filter_type.name}`.")
+            await status_msg.edit(content=f"\u26a0\ufe0f <@{user_id}> No messages found matching `{filter_type.name}`.")
             self.process_next_in_queue(source_channel.guild.id)
             return
 
@@ -238,7 +238,7 @@ class Archive(commands.Cog):
     def generate_progress_bar(self, current, success, errors, total, start_time, length=20):
         percent = current / total if total > 0 else 1
         filled = int(length * percent)
-        bar = '█' * filled + '░' * (length - filled)
+        bar = '\u2588' * filled + '\u2591' * (length - filled)
         
         if current > 0:
             elapsed = asyncio.get_event_loop().time() - start_time
@@ -250,12 +250,12 @@ class Archive(commands.Cog):
         else:
             eta_str = "Calculating ETA..."
             
-        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n✅ Success: {success} | ❌ Errors: {errors}\n*ETA: {eta_str}*"
+        return f"`[{bar}]` **{current}/{total}** ({int(percent * 100)}%)\n\u2705 Success: {success} | \u274c Errors: {errors}\n*ETA: {eta_str}*"
 
     async def execute_archive(self, message, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
         total = len(messages_to_archive)
         start_time = asyncio.get_event_loop().time()
-        loading_emoji = os.getenv('LOADING_EMOJI', '🔄')
+        loading_emoji = os.getenv('LOADING_EMOJI', '\U0001f504')
         
         embed = discord.Embed(
             title=f"{loading_emoji} Archiving in Progress...",
@@ -277,7 +277,7 @@ class Archive(commands.Cog):
                 embed=starter_embed
             )
         except Exception as e:
-            embed.title = "❌ Archive Failed"
+            embed.title = "\u274c Archive Failed"
             embed.description = f"Failed to create the forum thread: {e}"
             embed.color = discord.Color.red()
             await message.edit(embed=embed)
@@ -354,10 +354,10 @@ class Archive(commands.Cog):
                     pass
                 last_update_time = current_time
 
-        embed.title = "✅ Archive Complete"
+        embed.title = "\u2705 Archive Complete"
         embed.color = discord.Color.green() if errors == 0 else discord.Color.orange()
         await message.edit(embed=embed)
-        await thread.send(f"✅ Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
+        await thread.send(f"\u2705 Bulk archive has finished processing. (Success: {success}, Errors: {errors})")
         
         # Trigger next in queue
         self.process_next_in_queue(source_channel.guild.id)

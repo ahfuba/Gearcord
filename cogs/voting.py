@@ -35,7 +35,7 @@ class Voting(commands.Cog):
             await interaction.followup.send("No active threads found or no votes cast yet.")
             return
             
-        response = "**🏆 Current Clip Leaderboard 🏆**\n\n"
+        response = "**\U0001f3c6 Current Clip Leaderboard \U0001f3c6**\n\n"
         for i, entry in enumerate(leaderboard[:10]):
             response += f"**{i+1}.** {entry['thread'].mention} - {entry['votes']} votes\n"
             
