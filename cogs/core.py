@@ -16,10 +16,17 @@ class Core(commands.Cog):
             color=discord.Color.blurple()
         )
         
-        embed.add_field(name="📸 Archiving", value="""
-**`/archive_channel`**: Bulk sweep an entire text channel and dump it into a forum thread. Includes filters for videos, images, or voice notes.
-**`/setup_archive`**: Set the default forum channel for the right-click menu.
-**`Right-Click -> Apps -> Archive to Forum`**: Instantly move any single message to your configured archive forum.
+        embed.add_field(name="📸 Archiving (Walkthrough)", value="""
+**1. Setup Right-Click Archiving:**
+Run `/setup_archive` to pick a default forum channel. Once set, you can Right-Click any message -> Apps -> `Archive to Forum` to instantly save it as its own thread.
+
+**2. Bulk Sweep a Channel:**
+Run `/archive_channel` to move large amounts of messages into a single thread.
+• Select the source channel, target forum, and a filter (like `Videos Only`).
+• Choose the style (`Embed` or `Webhook Impersonation`).
+• The bot will **Scan** the channel and show you how many messages it found.
+• Once you click **Proceed**, it will queue your task, show a live progress bar with an ETA, and safely copy the messages.
+*(Note: Archiving commands require View Audit Log & Manage Channels permissions)*
         """, inline=False)
 
         embed.add_field(name="🤡 Wall of Shame", value="""
