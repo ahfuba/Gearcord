@@ -32,25 +32,35 @@ class ArchiveConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Proceed & Archive", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the person who initiated this scan can confirm it.", ephemeral=True)
-            return
+        try:
+            if interaction.user.id != self.user_id:
+                await interaction.response.send_message("Only the person who initiated this scan can confirm it.", ephemeral=True)
+                return
 
-        for child in self.children:
-            child.disabled = True
-        await interaction.response.edit_message(view=self)
-        self.stop()
-        
-        asyncio.create_task(self.cog.execute_archive(
-            message=interaction.message,
-            user_id=interaction.user.id,
-            source_channel=self.source_channel,
-            target_forum=self.target_forum,
-            thread_title=self.thread_title,
-            filter_type_name=self.filter_type_name,
-            style_val=self.style_val,
-            messages_to_archive=self.messages_to_archive
-        ))
+            for child in self.children:
+                child.disabled = True
+            
+            try:
+                await interaction.response.edit_message(view=self)
+            except discord.HTTPException as e:
+                print(f"Warning: Failed to acknowledge button click: {e}")
+                
+            self.stop()
+            
+            asyncio.create_task(self.cog.execute_archive(
+                message=interaction.message,
+                user_id=interaction.user.id,
+                source_channel=self.source_channel,
+                target_forum=self.target_forum,
+                thread_title=self.thread_title,
+                filter_type_name=self.filter_type_name,
+                style_val=self.style_val,
+                messages_to_archive=self.messages_to_archive
+            ))
+        except Exception as e:
+            print(f"CRITICAL ERROR IN BUTTON: {e}")
+            self.stop()
+            self.cog.process_next_in_queue(self.source_channel.guild.id)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
