@@ -30,10 +30,10 @@ class ArchiveConfirmView(discord.ui.View):
             pass
         self.cog.process_next_in_queue(self.source_channel.guild.id)
 
-    @discord.ui.button(label="Proceed & Archive", style=discord.ButtonStyle.green, custom_id="proceed")
+    @discord.ui.button(label="Proceed & Archive", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the person who initiated this scan can confirm it.")
+            await interaction.response.send_message("Only the person who initiated this scan can confirm it.", ephemeral=True)
             return
 
         for child in self.children:
@@ -41,7 +41,7 @@ class ArchiveConfirmView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         self.stop()
         
-        await self.cog.execute_archive(
+        asyncio.create_task(self.cog.execute_archive(
             message=interaction.message,
             user_id=interaction.user.id,
             source_channel=self.source_channel,
@@ -50,12 +50,12 @@ class ArchiveConfirmView(discord.ui.View):
             filter_type_name=self.filter_type_name,
             style_val=self.style_val,
             messages_to_archive=self.messages_to_archive
-        )
+        ))
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel")
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("Only the person who initiated this scan can cancel it.")
+            await interaction.response.send_message("Only the person who initiated this scan can cancel it.", ephemeral=True)
             return
 
         for child in self.children:
