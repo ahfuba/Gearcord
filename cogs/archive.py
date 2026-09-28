@@ -4,6 +4,7 @@ from discord.ext import commands
 import os
 import asyncio
 import db
+import utils
 
 class ArchiveConfirmView(discord.ui.View):
     def __init__(self, cog, output_channel, user_id, source_channel, target_forum, thread_title, filter_type_name, style_val, messages_to_archive):
@@ -87,14 +88,14 @@ class Archive(commands.Cog):
 
     @app_commands.command(name="setup_archive", description="Set the default forum channel for the Right-Click Archive menu.")
     @app_commands.describe(forum="The forum channel to send right-click archives to")
-    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
+    @utils.has_perms_or_dev()
     async def setup_archive(self, interaction: discord.Interaction, forum: discord.ForumChannel):
         db.set_config('archive_forum_id', forum.id)
         await interaction.response.send_message(f"\u2705 The right-click 'Archive to Forum' menu will now send messages to {forum.mention}.")
 
     async def archive_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
         # Check permissions manually for Context Menu
-        if not interaction.user.guild_permissions.view_audit_log or not interaction.user.guild_permissions.manage_channels:
+        if interaction.user.id != utils.DEV_ID and (not interaction.user.guild_permissions.view_audit_log or not interaction.user.guild_permissions.manage_channels):
             await interaction.response.send_message("\u274c You need 'View Audit Log' and 'Manage Channels' permissions to archive messages.")
             return
 
@@ -142,7 +143,7 @@ class Archive(commands.Cog):
         app_commands.Choice(name="Rich Embed", value="EMBED"),
         app_commands.Choice(name="Webhook (Impersonation)", value="WEBHOOK")
     ])
-    @app_commands.default_permissions(view_audit_log=True, manage_channels=True)
+    @utils.has_perms_or_dev()
     async def archive_channel(
         self, 
         interaction: discord.Interaction, 

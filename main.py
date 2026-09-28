@@ -24,6 +24,13 @@ class ClipBot(commands.Bot):
         # Sync the slash commands and context menus globally
         await self.tree.sync()
         print(f"Logged in as {self.user} and synced commands.")
+        
+        @self.tree.error
+        async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+            if isinstance(error, discord.app_commands.CheckFailure):
+                await interaction.response.send_message("\u274c You do not have permission to use this command.", ephemeral=True)
+            else:
+                print(f"Command error: {error}")
 
 if __name__ == '__main__':
     if not TOKEN:
