@@ -39,6 +39,7 @@ class ArchiveConfirmView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(view=self)
+        self.stop()
         
         await self.cog.execute_archive(
             message=interaction.message,
@@ -60,6 +61,7 @@ class ArchiveConfirmView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(content="\u274c Archiving operation cancelled.", embed=None, view=self)
+        self.stop()
         self.cog.process_next_in_queue(self.source_channel.guild.id)
 
 
