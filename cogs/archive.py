@@ -19,8 +19,12 @@ class ArchiveConfirmView(discord.ui.View):
         self.style_val = style_val
         self.messages_to_archive = messages_to_archive
         self.message = None
+        self.has_responded = False
 
     async def on_timeout(self):
+        if self.has_responded:
+            return
+            
         for child in self.children:
             child.disabled = True
         try:
@@ -45,6 +49,7 @@ class ArchiveConfirmView(discord.ui.View):
             except discord.HTTPException as e:
                 print(f"Warning: Failed to acknowledge button click: {e}")
                 
+            self.has_responded = True
             self.stop()
             
             asyncio.create_task(self.cog.execute_archive(
@@ -59,6 +64,7 @@ class ArchiveConfirmView(discord.ui.View):
             ))
         except Exception as e:
             print(f"CRITICAL ERROR IN BUTTON: {e}")
+            self.has_responded = True
             self.stop()
             self.cog.process_next_in_queue(self.source_channel.guild.id)
 
@@ -71,6 +77,7 @@ class ArchiveConfirmView(discord.ui.View):
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(content="\u274c Archiving operation cancelled.", embed=None, view=self)
+        self.has_responded = True
         self.stop()
         self.cog.process_next_in_queue(self.source_channel.guild.id)
 
